@@ -1,0 +1,124 @@
+// This is your Prisma schema file
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CurrencyType {
+  BTC
+  ETH
+  XRP
+  DOGE
+  THB
+  USD
+}
+
+enum OrderType {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  INTERNAL_TRANSFER
+  EXTERNAL_TRANSFER
+  TRADE
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  status        UserStatus      @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  wallets       Wallet[]
+  orders        Order[]
+  externalWallets ExternalWallet[]
+
+  @@map("users")
+}
+
+model Wallet {
+  id            String        @id @default(uuid())
+  userId        String
+  currencyType  CurrencyType
+  balance       Decimal       @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id])
+  sentTransactions     Transaction[] @relation("FromWallet")
+  receivedTransactions Transaction[] @relation("ToWallet")
+
+  @@unique([userId, currencyType])
+  @@map("wallets")
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  userId        String
+  type          OrderType
+  cryptoCurrency CurrencyType
+  fiatCurrency  CurrencyType
+  amount        Decimal
+  pricePerUnit  Decimal
+  status        OrderStatus   @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id])
+  transaction   Transaction?
+
+  @@map("orders")
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  fromWalletId  String
+  toWalletId    String
+  orderId       String?           @unique
+  amount        Decimal
+  type          TransactionType
+  status        TransactionStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  fromWallet    Wallet            @relation("FromWallet", fields: [fromWalletId], references: [id])
+  toWallet      Wallet            @relation("ToWallet", fields: [toWalletId], references: [id])
+  order         Order?            @relation(fields: [orderId], references: [id])
+
+  @@map("transactions")
+}
+
+model ExternalWallet {
+  id            String        @id @default(uuid())
+  userId        String
+  address       String
+  currencyType  CurrencyType
+  label         String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@map("external_wallets")
+} 
