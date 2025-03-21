@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { Decimal } from 'decimal.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -39,80 +40,6 @@ router.get('/:id/balance', async (req, res) => {
     res.json({ balance: wallet.balance });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch balance' });
-  }
-});
-
-// Transfer between wallets
-router.post('/transfer', async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const { fromWalletId, toWalletId, amount } = req.body;
-
-    // Start transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Get source wallet
-      const fromWallet = await tx.wallet.findFirst({
-        where: { id: fromWalletId, userId }
-      });
-
-      if (!fromWallet) {
-        throw new Error('Source wallet not found');
-      }
-
-      if (fromWallet.balance < amount) {
-        throw new Error('Insufficient balance');
-      }
-
-      // Get destination wallet
-      const toWallet = await tx.wallet.findUnique({
-        where: { id: toWalletId }
-      });
-
-      if (!toWallet) {
-        throw new Error('Destination wallet not found');
-      }
-
-      if (fromWallet.currencyType !== toWallet.currencyType) {
-        throw new Error('Cannot transfer between different currencies');
-      }
-
-      // Update wallets
-      await tx.wallet.update({
-        where: { id: fromWalletId },
-        data: { balance: { decrement: amount } }
-      });
-
-      await tx.wallet.update({
-        where: { id: toWalletId },
-        data: { balance: { increment: amount } }
-      });
-
-      // Create transaction record
-      const transaction = await tx.transaction.create({
-        data: {
-          fromWalletId,
-          toWalletId,
-          amount,
-          type: 'INTERNAL_TRANSFER',
-          status: 'COMPLETED'
-        }
-      });
-
-      return transaction;
-    });
-
-    res.json({ 
-      message: 'Transfer successful',
-      transaction: result
-    });
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(400).json({ error: error.message });
-    } else {
-      res.status(400).json({ error: 'An unknown error occurred' });
-    }
   }
 });
 
